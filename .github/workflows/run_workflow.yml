@@ -1,0 +1,72 @@
+# .github/workflows/run_workflow.yml
+
+name: Multi-Image SPC ARL Computation 🤖
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  run-study:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 1. Checkout Code 📥
+      uses: actions/checkout@v4
+      
+    - name: 2. Setup Python Environment 🐍
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: 3. Install Dependencies 📦
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: 4. Check for Real Data Existence and Content 🛑
+      id: check_data
+      # این گام بررسی می‌کند که پوشه‌ها وجود داشته باشند و حداقل یک فایل عکس در آن‌ها باشد.
+      # اگر هر یک از این شرایط نقض شود، WorkFlow به خطا خواهد خورد.
+      run: |
+        LEFT_DIR="auto_cropped"
+        RIGHT_DIR="auto_cropped_right"
+        
+        echo "Checking for mandatory data folders: $LEFT_DIR and $RIGHT_DIR"
+        
+        # بررسی وجود پوشه چپ
+        if [ ! -d "$LEFT_DIR" ]; then
+          echo "ERROR: Mandatory data folder '$LEFT_DIR' not found."
+          exit 1
+        fi
+        
+        # بررسی وجود پوشه راست
+        if [ ! -d "$RIGHT_DIR" ]; then
+          echo "ERROR: Mandatory data folder '$RIGHT_DIR' not found."
+          exit 1
+        fi
+        
+        # بررسی خالی نبودن پوشه چپ (جستجوی حداقل یک فایل با پسوندهای رایج عکس)
+        LEFT_COUNT=$(find "$LEFT_DIR" -maxdepth 1 -type f \( -name "*.jpg" -o -name "*.png" -o -name "*.jpeg" -o -name "*.tif" \) | wc -l)
+        if [ "$LEFT_COUNT" -eq 0 ]; then
+          echo "ERROR: Data folder '$LEFT_DIR' is empty or contains no image files."
+          exit 1
+        fi
+        
+        # بررسی خالی نبودن پوشه راست
+        RIGHT_COUNT=$(find "$RIGHT_DIR" -maxdepth 1 -type f \( -name "*.jpg" -o -name "*.png" -o -name "*.jpeg" -o -name "*.tif" \) | wc -l)
+        if [ "$RIGHT_COUNT" -eq 0 ]; then
+          echo "ERROR: Data folder '$RIGHT_DIR' is empty or contains no image files."
+          exit 1
+        fi
+        
+        echo "SUCCESS: Found $LEFT_COUNT images in left folder and $RIGHT_COUNT images in right folder. Proceeding..."
+
+    - name: 5. Run Full Study Workflow 🚀
+      # اجرای اسکریپت اصلی. چون مرحله قبل موفق بوده، مطمئن هستیم که داده‌های واقعی برای بارگذاری وجود دارند.
+      run: |
+        python run_full_study.py
