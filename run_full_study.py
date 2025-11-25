@@ -1,16 +1,25 @@
 # run_full_study.py
-from src.simulation import generate_dataset # برای حالت fallback/تست
-from src.monitors import FusedMEWMA, CombinedMEWMA
-from src.utils import load_paired_image_dataset, dummy_ooc_generator # 👈 وارد کردن تابع جدید
+import sys
+import os
+
+# 🚨🚨 FIX: رفع خطای ModuleNotFoundError با افزودن پوشه src به مسیر پایتون 🚨🚨
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# اطمینان حاصل می‌کند که ماژول‌های داخل src (مانند simulation.py و utils.py) پیدا شوند.
+sys.path.append(os.path.join(current_dir, 'src')) 
+
+# پس از اصلاح مسیر، دیگر نیازی به پیشوند 'src.' نیست.
+# تمامی ماژول‌ها مستقیماً از src وارد می‌شوند.
+from simulation import generate_dataset 
+from monitors import FusedMEWMA, CombinedMEWMA
+from utils import load_paired_image_dataset, dummy_ooc_generator
 import numpy as np
 import time
 from tqdm import tqdm
-import os
+# import os (قبلا در بالا وارد شده است)
 
 # ----------------------------------------------------------------------
-# توابع کمکی (ARL Calculation)
+# توابع کمکی (ARL Calculation) - بدون تغییر
 # ----------------------------------------------------------------------
-# ... (single_run و compute_arl بدون تغییر باقی می‌مانند) ...
 def single_run(monitor, shifted_gen_func, max_rl=2000):
     """اجرای یک Run Length (RL)"""
     if isinstance(monitor, FusedMEWMA):
@@ -21,7 +30,7 @@ def single_run(monitor, shifted_gen_func, max_rl=2000):
     
     for t in range(max_rl):
         img1, img2 = shifted_gen_func()
-        is_ooc, _ = monitor.monitor(img1, img2) # تکرار در monitors.py به صورت داخلی انجام می‌شود
+        is_ooc, _ = monitor.monitor(img1, img2) 
         if is_ooc:
             return t+1
     return max_rl
@@ -40,7 +49,7 @@ if __name__ == "__main__":
     # --- تنظیمات برای بازتولید مقاله ---
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     
-    # 👈 تعریف مسیرهای جدید داده ورودی شما
+    # 👈 تعریف مسیرهای داده ورودی شما
     LEFT_DATA_PATH = os.path.join(BASE_DIR, "auto_cropped")
     RIGHT_DATA_PATH = os.path.join(BASE_DIR, "auto_cropped_right")
     
@@ -58,9 +67,9 @@ if __name__ == "__main__":
     img1_ic, img2_ic = load_paired_image_dataset(LEFT_DATA_PATH, RIGHT_DATA_PATH, size=IMG_SIZE)
     
     if len(img1_ic) == 0:
+        # این بخش به دلیل بررسی‌های گیت‌هاب اکشنز نباید در CI اجرا شود، 
+        # اما برای اجرای محلی یا تست باقی می‌ماند.
         print("\n!!! WARNING: No real paired IC data loaded. Using synthetic data for demonstration. !!!")
-        print(f"Please ensure images with matching names exist in '{os.path.basename(LEFT_DATA_PATH)}' and '{os.path.basename(RIGHT_DATA_PATH)}'.")
-        # Fallback به داده مصنوعی
         img1_ic, img2_ic = generate_dataset(n_samples=TUCKER_RANKS_MAX[0], size=IMG_SIZE, rho_cross=0.9, smooth_sigma=2.0)
     
     N_IC_SAMPLES = len(img1_ic)
