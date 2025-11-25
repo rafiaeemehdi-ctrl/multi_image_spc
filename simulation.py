@@ -1,54 +1,55 @@
 # simulation.py
 import numpy as np
-from scipy.ndimage import gaussian_filter
+from scipy.fft import fftn, ifftn
+from scipy.ndimage import gaussian_filter  # اگر smooth_sigma استفاده می‌کنی، اضافه کن
 
-def simulate_pair_smooth(size=(64,64), rho_cross=0.9, smooth_sigma=2.0, seed=None):
-    """
-    تولید سریع دو تصویر همبسته فضایی برای شبیه‌سازی.
-    روش: یک میدان پایه گاوسی تولید، فیلتر گاوسی می‌شود (جهت ایجاد همبستگی فضایی).
-    """
+def simulate_cross_correlated_pair(size=(128,128), rho_auto=0.95, rho_cross=0.7, seed=None):
     if seed is not None:
         np.random.seed(seed)
-    h,w = size
-    base = np.random.randn(h,w)
-    # فیلتر کردن برای ایجاد همبستگی فضایی
-    base = gaussian_filter(base, sigma=smooth_sigma)
-    noise2 = np.random.randn(h,w)
+        
+    h, w = size
+    H = 2 * h
+    W = 2 * w
     
-    img1 = base
-    # همبستگی بین-تصویری (cross-correlation)
-    img2 = rho_cross * base + np.sqrt(max(0,1-rho_cross**2)) * noise2
-    img2 = gaussian_filter(img2, sigma=smooth_sigma) # فیلتر کردن تصویر دوم
+    x = np.arange(w)
+    y = np.arange(h)
+    X, Y = np.meshgrid(x, y)
+    dist = np.sqrt((X - X.T)**2 + (Y - Y.T)**2)
     
-    # نرمال‌سازی به بازه [0, 255] و تبدیل به uint8
-    def norm(x):
-        x = x - x.min()
-        x = x / (x.ptp() + 1e-12)
-        return (x*255).astype(np.uint8)
-    return norm(img1), norm(img2)
+    range_param = 20.0
+    gamma = np.exp(-dist / range_param)
+    
+    C11 = rho_auto * gamma
+    C22 = rho_auto * gamma
+    C12 = rho_cross * gamma
+    
+    C_circ = np.zeros((H, W))
+    C_circ[:h, :w] = C11
+    C_circ[:h, W-w:] = C11[:, ::-1]
+    C_circ[H-h:, :w] = C11[::-1, :]
+    C_circ[H-h:, W-w:] = C11[::-1, ::-1]
+    
+    eigenvalues = np.real(fftn(C_circ))
+    eigenvalues = np.maximum(eigenvalues, 0)
+    
+    Z = np.random.randn(H, W)
+    field = np.real(ifftn(np.sqrt(eigenvalues) * fftn(Z)))
+    
+    img1 = field[:h, :w]
+    img2 = field[h:, :w]
+    
+    def normalize(img):
+        img = img - img.min()
+        ptp_val = np.ptp(img)  # فیکس: np.ptp(img) به جای img.ptp()
+        img = img / (ptp_val + 1e-8)
+        return (img * 255).astype(np.uint8)
+        
+    return normalize(img1), normalize(img2)
 
-def generate_dataset(n_samples=200, **kwargs):
-    """تولید مجموعه داده فاز I (In-Control)"""
-    imgs1, imgs2 = [], []
+def generate_dataset(n_samples=10000, **kwargs):
+    img1_list, img2_list = [], []
     for i in range(n_samples):
-        a,b = simulate_pair_smooth(seed=i, **kwargs)
-        imgs1.append(a); imgs2.append(b)
-    # خروجی به شکل (N, H, W)
-    return np.array(imgs1), np.array(imgs2)
-
-def generate_shifted_image(size=(64,64), rho_cross=0.9, smooth_sigma=2.0, magnitude=20):
-    """
-    تولید یک جفت تصویر خارج از کنترل (Out-of-Control)
-    (شبیه‌سازی یک شیفت موضعی، همانند مثال run_full_study.py شما)
-    """
-    img1, img2 = simulate_pair_smooth(size=size, rho_cross=rho_cross, smooth_sigma=smooth_sigma)
-    center=(size[0]//2, size[1]//2)
-    radius=10
-    ys, xs = np.ogrid[:size[0], :size[1]]
-    mask = (ys-center[0])**2 + (xs-center[1])**2 <= radius*radius
-    
-    im1 = img1.astype(int)
-    # اعمال شیفت در یک ناحیه دایره‌ای (تنها بر روی img1 برای تست)
-    im1[mask] = np.clip(im1[mask] + magnitude, 0, 255)
-    
-    return im1.astype(np.uint8), img2.astype(np.uint8)
+        im1, im2 = simulate_cross_correlated_pair(seed=i, **kwargs)
+        img1_list.append(im1)
+        img2_list.append(im2)
+    return np.array(img1_list), np.array(img2_list)
