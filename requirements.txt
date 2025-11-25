@@ -1,0 +1,6 @@
+numpy
+scipy
+matplotlib
+tensorly          # هسته MPCA/Tucker
+tqdm             # برای نمایش نوار پیشرفت
+scikit-image     # برای بارگذاری و پردازش تصاویر در utils.py
