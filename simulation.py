@@ -1,9 +1,13 @@
 # simulation.py
 import numpy as np
 from scipy.fft import fftn, ifftn
-from scipy.ndimage import gaussian_filter  # اگر smooth_sigma استفاده می‌کنی، اضافه کن
+from scipy.ndimage import gaussian_filter  # برای smooth_sigma
 
-def simulate_cross_correlated_pair(size=(128,128), rho_auto=0.95, rho_cross=0.7, seed=None):
+def simulate_cross_correlated_pair(size=(128,128), rho_auto=0.95, rho_cross=0.7, seed=None, smooth_sigma=0.0):
+    """
+    تولید یک جفت تصویر همبسته فضایی با روش Circulant Embedding
+    حالا با smooth_sigma برای gaussian smoothing (اختیاری)
+    """
     if seed is not None:
         np.random.seed(seed)
         
@@ -38,9 +42,14 @@ def simulate_cross_correlated_pair(size=(128,128), rho_auto=0.95, rho_cross=0.7,
     img1 = field[:h, :w]
     img2 = field[h:, :w]
     
+    # اعمال smoothing اگر smooth_sigma > 0
+    if smooth_sigma > 0:
+        img1 = gaussian_filter(img1, sigma=smooth_sigma)
+        img2 = gaussian_filter(img2, sigma=smooth_sigma)
+    
     def normalize(img):
         img = img - img.min()
-        ptp_val = np.ptp(img)  # فیکس: np.ptp(img) به جای img.ptp()
+        ptp_val = np.ptp(img)  # سازگار با NumPy 2.0+
         img = img / (ptp_val + 1e-8)
         return (img * 255).astype(np.uint8)
         
